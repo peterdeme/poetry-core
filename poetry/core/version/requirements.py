@@ -194,6 +194,22 @@ NAMED_REQUIREMENT = NAME + Optional(EXTRAS) + (URL_AND_MARKER | VERSION_AND_MARK
 REQUIREMENT = stringStart + NAMED_REQUIREMENT + stringEnd
 
 
+GRAMMAR = r"""
+start: _requirement
+
+_requirement: _full_name
+_full_name: NAME _extras* _version_specification*
+_extras: "[" EXTRA ("," EXTRA)* "]"
+_version_specification: " "* (_single_version | "(" _single_version ")")
+_single_version: VERSION_CONSTRAINT
+
+NAME: /[a-zA-Z][a-zA-Z0-9-_.]*/
+FULL_NAME: NAME
+EXTRA: NAME
+VERSION_CONSTRAINT: /(~=|==|!=|<=|>=|<|>|===)((?:(?<====)\s*[^\s]*)|(?:(?<===|!=)\s*v?(?:[0-9]+!)?[0-9]+(?:\.[0-9]+)*(?:[-_\.]?(a|b|c|rc|alpha|beta|pre|preview)[-_\.]?[0-9]*)?(?:(?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*))?(?:(?:[-_\.]?dev[-_\.]?[0-9]*)?(?:\+[a-z0-9]+(?:[-_\.][a-z0-9]+)*)? # local|\.\*)?)|(?:(?<=~=)\s*v?(?:[0-9]+!)?[0-9]+(?:\.[0-9]+)+(?:[-_\.]?(a|b|c|rc|alpha|beta|pre|preview)[-_\.]?[0-9]*)?(?:(?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*))?(?:[-_\.]?dev[-_\.]?[0-9]*)?)|(?:(?<!==|!=|~=)\s*v?(?:[0-9]+!)?[0-9]+(?:\.[0-9]+)*(?:[-_\.]?(a|b|c|rc|alpha|beta|pre|preview)[-_\.]?[0-9]*)?(?:(?:-[0-9]+)|(?:[-_\.]?(post|rev|r)[-_\.]?[0-9]*))?(?:[-_\.]?dev[-_\.]?[0-9]*)?))/
+"""
+
+
 class Requirement(object):
     """Parse a requirement.
 

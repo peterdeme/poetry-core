@@ -22,6 +22,7 @@ classifiers = [
 python = "~2.7 || ^3.5"
 
 jsonschema = "^3.2.0"
+lark-parser = "^0.8.5"
 packaging = "^20.1"
 pyparsing = "^2.4.6"
 tomlkit = "^0.5.11"

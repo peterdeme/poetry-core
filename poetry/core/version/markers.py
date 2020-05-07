@@ -5,6 +5,9 @@ from typing import Dict
 from typing import Iterator
 from typing import List
 
+from lark import Lark
+from lark import Token
+from lark import Tree
 from pyparsing import Forward
 from pyparsing import Group
 from pyparsing import Literal as L  # noqa
@@ -121,6 +124,48 @@ MARKER = stringStart + MARKER_EXPR + stringEnd
 
 
 _undefined = object()
+
+GRAMMAR = """
+start: marker
+
+marker: _atom (BOOL_OP marker)*
+_atom: item | ("(" marker ")")
+item: (MARKER_NAME MARKER_OP _marker_value) | (_marker_value MARKER_OP MARKER_NAME)
+_marker_value: SINGLE_QUOTED_STRING | ESCAPED_STRING
+
+MARKER_NAME: "implementation_version"
+    | "platform_python_implementation"
+    | "implementation_name"
+    | "python_full_version"
+    | "platform_release"
+    | "platform_version"
+    | "platform_machine"
+    | "platform_system"
+    | "python_version"
+    | "sys_platform"
+    | "sys_platform"
+    | "os_name"
+    | "os.name"
+    | "sys.platform"
+    | "platform.version"
+    | "platform.machine"
+    | "platform.python_implementation"
+    | "python_implementation"
+    | "extra"
+MARKER_OP: "===" | "==" | ">=" | "<=" | ">" | "<" | "!=" | "~=" | "not in" | "in"
+SINGLE_QUOTED_STRING: /\'([^'])*\'/
+QUOTED_STRING: /"([^"])*"/
+MARKER_VALUE: /(.+?)/
+BOOL_OP: "and" | "or"
+L_PAREN: "("
+R_PAREN: ")"
+
+%import common.WS_INLINE
+%import common.ESCAPED_STRING
+%ignore WS_INLINE
+"""
+
+_parser = Lark(GRAMMAR, parser="lalr")
 
 
 def _coerce_parse_result(results):
@@ -665,16 +710,6 @@ class MarkerUnion(BaseMarker):
         if any(m.is_any() for m in markers):
             return AnyMarker()
 
-        to_delete_indices = set()
-        for i, marker in enumerate(markers):
-            for j, m in enumerate(markers):
-                if m.invert() == marker:
-                    to_delete_indices.add(i)
-                    to_delete_indices.add(j)
-
-        for idx in reversed(sorted(to_delete_indices)):
-            del markers[idx]
-
         if not markers:
             return AnyMarker()
 
@@ -804,6 +839,66 @@ def parse_marker(marker):
     markers = _coerce_parse_result(MARKER.parseString(marker))
 
     return _compact_markers(markers)
+
+
+def new_parse_marker(marker):
+    if marker == "<empty>":
+        return EmptyMarker()
+
+    if not marker or marker == "*":
+        return AnyMarker()
+
+    parsed = _parser.parse(marker)
+
+    print(marker)
+    print(parsed.children)
+    print(parsed.pretty())
+    markers = _new_compact_markers(parsed.children)
+
+    return markers
+
+
+def _new_compact_markers(tree_elements):  # type: (Tree) -> BaseMarker
+    groups = [MultiMarker()]
+    for token in tree_elements:
+        if isinstance(token, Token):
+            if token.type == "BOOL_OP" and token.value == "or":
+                groups.append(MultiMarker())
+
+            continue
+
+        if token.data == "marker":
+            groups[-1] = MultiMarker.of(
+                groups[-1], _new_compact_markers(token.children)
+            )
+        elif token.data == "item":
+            name, op, value = token.children
+            if value.type == "MARKER_NAME":
+                name, value, = value, name
+
+            value = value[1:-1]
+            groups[-1] = MultiMarker.of(
+                groups[-1], SingleMarker(name, "{}{}".format(op, value))
+            )
+        elif token.data == "BOOL_OP":
+            if token.children[0] == "or":
+                groups.append(MultiMarker())
+
+    for i, group in enumerate(reversed(groups)):
+        if group.is_empty():
+            del groups[len(groups) - 1 - i]
+            continue
+
+        if isinstance(group, MultiMarker) and len(group.markers) == 1:
+            groups[len(groups) - 1 - i] = group.markers[0]
+
+    if not groups:
+        return EmptyMarker()
+
+    if len(groups) == 1:
+        return groups[0]
+
+    return MarkerUnion.of(*groups)
 
 
 def _compact_markers(markers):

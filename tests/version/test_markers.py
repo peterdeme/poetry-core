@@ -5,7 +5,7 @@ import pytest
 from poetry.core.version.markers import MarkerUnion
 from poetry.core.version.markers import MultiMarker
 from poetry.core.version.markers import SingleMarker
-from poetry.core.version.markers import parse_marker
+from poetry.core.version.markers import new_parse_marker as parse_marker
 
 
 def test_single_marker():
